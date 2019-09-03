@@ -160,5 +160,5 @@ class NNQPlayer(Player):
         self.s_last = None
         self.a_last = None
 
-        self.record.append(winner)
+        self.record.append(r) 
 

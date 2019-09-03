@@ -6,6 +6,7 @@ import chainer.functions as F
 import chainer.links as L
 import numpy as np
 import copy
+import matplotlib.pyplot as plt
 
 class QFunction(chainer.Chain):
 
@@ -86,31 +87,35 @@ class Memory(object):
 q_function = QFunction()
 memory = Memory(size=128)
 
-player1 = reversi.player.RandomPlayer('ランダム')
-player2 = reversi.player.NNQPlayer('Q太郎', q_function, memory, eps=0.05)
+CPU = reversi.player.RandomPlayer('ランダム')
+ME = reversi.player.NNQPlayer('Q太郎', q_function, memory, eps=0.05)
 
 optimizer = chainer.optimizers.Adam()
 optimizer.setup(q_function)
 
-for i in tqdm(range(10000)):
+for i in tqdm(range(100)):
 
     if np.random.random() > 0.5:
-        B = player1
-        W = player2
+        B = CPU
+        W = ME
     else:
-        B = player2
-        W = player1
+        B = ME
+        W = CPU
 
     game = reversi.Reversi(B,W)
     game.main_loop(print_game=False)
     loss = train_q_function(q_function, memory, optimizer)
 
-game = reversi.Reversi(player1,player2)
+game = reversi.Reversi(CPU,ME)
 game.main_loop(print_game=True)
 
-# # 勝率の変化
-# wininig_Q = np.array(nn_q_learning.record) == WIN
+# 勝率の変化
 
-# plt.grid(True)
-# plt.ylim(0, 1)
-# plt.plot(np.cumsum(wininig_Q) / (np.arange(len(wininig_Q)) + 1))
+wininig_Q = np.array(ME.record) == 1
+
+plt.grid(True)
+plt.ylim(0, 1)
+plt.plot(np.cumsum(wininig_Q) / (np.arange(len(wininig_Q)) + 1))
+plt.savefig("winning plot")
+
+
