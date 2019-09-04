@@ -91,7 +91,7 @@ class RandomPlayer(Player):
     def __init__(self, name):
         self.name = name
 
-    def action(self, state, possible_hand):
+    def action(self, state, possible_hand, episode):
         hand = random.choice(possible_hand.split(',')) #listからrandomに位置(str型)を選択
         action = '{}_{}'.format(self.color, hand)
         return action
@@ -119,20 +119,21 @@ class NNQPlayer(Player):
 
         self.record = []
 
-    def action(self, state, possible_hand):
+    def action(self, state, possible_hand, episode):
         state = state.split(',')[0]
         state = [i for i in state if i in ['b','w','-']]
         s = [(0 if i == '-' else (1 if i == self.color else -1)) for i in state]
         possible_hand = [int(i) for i in possible_hand.split(',')]
-        
-        if np.random.random() < self.eps:
+
+        epsilon = 0.5 * (1 / (episode+1)) #徐々に最適行動のみをとるε-greedy法
+        if np.random.random() < epsilon:
             hand = random.choice(possible_hand)
         else:
-            x = np.array(s).reshape(1,64).astype(np.float32) #chainerの仕様上の変換
-            q = self.q_function(x).data[0] #次元(65,)    
-            nopass_q = q[1:]
-            nopass_q[np.where(np.array(s)!=0)] = -np.inf
-            q[1:] = nopass_q #インデックス0(パス)を除く要素で0以外は置けない
+            x = np.array(s).reshape(1,64) 
+            q = self.q_function.model.predict(x).reshape(-1) #shape(65,)で返る(パスq値1変数+盤目q値64変数)
+            q_nopass = q[1:]
+            q_nopass[np.where(np.array(s)!=0)] = -np.inf
+            q[1:] = q_nopass
             hand = np.argmax(q)
         
         if self.s_last is not None: #状態sと行動handを記憶
