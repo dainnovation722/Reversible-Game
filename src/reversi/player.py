@@ -88,8 +88,12 @@ class RandomPlayer(Player):
 
     """Revirsi Player acts randomly."""
 
-    def __init__(self, name):
+    def __init__(self, name, reward_win=1., reward_draw=0., reward_lose=-1.):
         self.name = name
+        self.reward_win = reward_win
+        self.reward_draw = reward_draw
+        self.reward_lose = reward_lose
+        self.record = []
 
     def action(self, state, possible_hand, episode):
         hand = random.choice(possible_hand.split(',')) #listからrandomに位置(str型)を選択
@@ -97,7 +101,14 @@ class RandomPlayer(Player):
         return action
 
     def finalize(self, state, winner):
-        pass
+        if winner == self.color:
+            r = self.reward_win
+        elif winner == 'd':
+            r = self.reward_draw
+        else:
+            r = self.reward_lose
+
+        self.record.append(r)
 
 
 class NNQPlayer(Player):

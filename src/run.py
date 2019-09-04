@@ -6,6 +6,9 @@ import copy
 import matplotlib.pyplot as plt
 from keras.models import Sequential
 from keras.layers import Dense, Activation
+from time import time 
+t1 = time()
+total_epi = 100 #訓練回数
 
 class QFunction():
 
@@ -22,7 +25,7 @@ class QFunction():
     def fit(self,q_s, t):
         self.model.fit(q_s, t ,verbose=0)
 
-def train_q_function(q_function, memory, 
+def train_q_function(q_function, memory, target_q_function,
                      batch_size=32, gamma=0.9, n_epoch=1):
     q_function_copy = copy.deepcopy(q_function)
     for e in range(n_epoch):
@@ -35,14 +38,14 @@ def train_q_function(q_function, memory,
             
             q_s = q_function.model.predict(x)
             q_s_dash = q_function_copy.model.predict(x_dash)
-
-            max_q_s_a_dash = np.max(q_s_dash, axis=1)
+            max_q_s_a_dash = np.argmax(q_s_dash, axis=1).reshape(-1)
+            q_s_dash = target_q_function.model.predict(x_dash)[:,max_q_s_a_dash]
             max_q_s_a_dash[e == 1] == 0
             t = q_s.copy()
             t[np.arange(len(t)), a] += r + gamma * \
                 max_q_s_a_dash - t[np.arange(len(t)), a]
             
-            q_function.model.fit(x, t) #学習        
+            q_function.fit(x, t) #学習        
             
 class Memory(object):
 
@@ -75,14 +78,16 @@ class Memory(object):
         self.counter += 1
 
 q_function = QFunction()
+target_q_function = QFunction()
 memory = Memory(size=128)
 
 CPU = reversi.player.RandomPlayer('ランダム')
 ME = reversi.player.NNQPlayer('Q太郎', q_function, memory)
 
 
-for episode in tqdm(range(10)):
-
+for episode in tqdm(range(total_epi)):
+    target_q_function.model.set_weights(q_function.model.get_weights()) #行動決定と価値計算のQnetworkを同じにする
+    sep = total_epi*0.1
     if np.random.random() > 0.5:
         B = CPU
         W = ME
@@ -92,18 +97,23 @@ for episode in tqdm(range(10)):
 
     game = reversi.Reversi(B,W)
     game.main_loop(episode=episode, print_game=False)
-    train_q_function(q_function, memory)
+    train_q_function(q_function, memory, target_q_function)
+    if episode%sep==0:
+        print("WinCounts ME:{} Enemy:{} Draw:{}, rate:{:.3f}".format(\
+            ME.record.count(1),CPU.record.count(1),CPU.record.count(0),\
+            sum(ME.record)/len(ME.record)))
 
-game = reversi.Reversi(CPU,ME)
-game.main_loop(print_game=True)
+# game = reversi.Reversi(CPU,ME)
+# game.main_loop(print_game=True)
 
 # 勝率の変化
 
-wininig_Q = np.array(ME.record) == 1
+winning_Q = np.array(ME.record)==1
 
 plt.grid(True)
 plt.ylim(0, 1)
-plt.plot(np.cumsum(wininig_Q) / (np.arange(len(wininig_Q)) + 1))
+plt.plot(np.cumsum(winning_Q) / (np.arange(len(winning_Q)) + 1))
 plt.savefig("winning_plot.png")
 
-
+Time = time() - t1
+print("Execution Time : {:.3f} minutes".format(Time/60))
