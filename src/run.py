@@ -7,6 +7,7 @@ import chainer.links as L
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
+total_episode = 100 #訓練回数
 
 class QFunction(chainer.Chain):
 
@@ -93,7 +94,7 @@ ME = reversi.player.NNQPlayer('Q太郎', q_function, memory, eps=0.05)
 optimizer = chainer.optimizers.Adam()
 optimizer.setup(q_function)
 
-for i in tqdm(range(100)):
+for episode in tqdm(range(total_episode)):
 
     if np.random.random() > 0.5:
         B = CPU
@@ -116,6 +117,6 @@ wininig_Q = np.array(ME.record) == 1
 plt.grid(True)
 plt.ylim(0, 1)
 plt.plot(np.cumsum(wininig_Q) / (np.arange(len(wininig_Q)) + 1))
-plt.savefig("winning plot")
+plt.savefig("winning_plot.png")
 
 
