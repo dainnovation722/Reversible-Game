@@ -8,27 +8,37 @@ from keras.models import Sequential
 from keras.layers import Dense, Activation
 from time import time 
 t1 = time()
-total_epi = 100 #訓練回数
+total_episode = 100 #訓練回数
 
 class QFunction():
 
-    def __init__(self):
+    def __init__(self,summary=False):
         self.model = Sequential([
             Dense(128, activation='linear', input_shape=(64,)),
             Dense(128, activation='linear'),
             Dense(65, activation='linear')
         ])
+        self.model2 = Sequential([
+            Dense(128, activation='linear', input_shape=(64,)),
+            Dense(128, activation='linear'),
+            Dense(65, activation='linear')
+        ])
+        
         self.model.compile(optimizer='adagrad', loss='mse')
-        print(self.model.summary())
+        self.model2.compile(optimizer='adagrad', loss='mse')
+        
+        if summary:
+            print(self.model.summary())
 
-    
-    def fit(self,q_s, t):
-        self.model.fit(q_s, t ,verbose=0)
-
+    def same_weights(self):
+        self.model2.set_weights(self.model.get_weights())
+        
+        
 def train_q_function(q_function, memory, target_q_function,
                      batch_size=32, gamma=0.9, n_epoch=1):
-    q_function_copy = copy.deepcopy(q_function)
-    for e in range(n_epoch):
+    tt_0=time()
+        
+    for e in range(n_epoch): #1つの試合の経験値(memory)から学び取る回数
         perm = np.random.permutation(len(memory)) #memoryのデータは時系列データなのでデータ間に相関が出ないようにrandom samplingする
         for i in range(0, len(memory), batch_size):
             s, a, s_dash, r, e = memory.read(perm[i:i+batch_size])
@@ -36,17 +46,19 @@ def train_q_function(q_function, memory, target_q_function,
             x = s.astype(np.float32)
             x_dash = s_dash.astype(np.float32)
             
-            q_s = q_function.model.predict(x)
-            q_s_dash = q_function_copy.model.predict(x_dash)
-            max_q_s_a_dash = np.argmax(q_s_dash, axis=1).reshape(-1)
-            q_s_dash = target_q_function.model.predict(x_dash)[:,max_q_s_a_dash]
-            max_q_s_a_dash[e == 1] == 0
+            q_s = q_function.model.predict(x) #現状態sのq値候補(行動決定)
+            q_s_dash = q_function.model.predict(x_dash) #未来状態s_dashのq値候補(価値決定の)
+            max_q_s_a_dash_index = np.argmax(q_s_dash, axis=1).reshape(-1) #未来状態s_dashの行動をインデックスで決定
+            max_q_s_a_dash = target_q_function.predict(x_dash)
+            max_q_s_a_dash = np.array([max_q_s_a_dash[i,j] for i,j in enumerate(max_q_s_a_dash_index)]) #価値を評価し(←ここが異なる関数で計算！！)、上記で得られたインデックスに合うq値を計算
+            
+            max_q_s_a_dash[e == 1] == 0 #試合終了の状態があれば次の状態は存在しないので次の状態で得られる最大報酬は0
             t = q_s.copy()
             t[np.arange(len(t)), a] += r + gamma * \
-                max_q_s_a_dash - t[np.arange(len(t)), a]
+                max_q_s_a_dash 
             
-            q_function.fit(x, t) #学習        
-            
+            q_function.model.fit(x, t, verbose=0) #学習        
+    print("set_weightst time : {:.3f}s".format(time()-tt_0))        
 class Memory(object):
 
     def __init__(self, size=128):
@@ -78,16 +90,17 @@ class Memory(object):
         self.counter += 1
 
 q_function = QFunction()
-target_q_function = QFunction()
 memory = Memory(size=128)
 
 CPU = reversi.player.RandomPlayer('ランダム')
 ME = reversi.player.NNQPlayer('Q太郎', q_function, memory)
 
 
-for episode in tqdm(range(total_epi)):
-    target_q_function.model.set_weights(q_function.model.get_weights()) #行動決定と価値計算のQnetworkを同じにする
-    sep = total_epi*0.1
+for episode in tqdm(range(total_episode)):
+    q_function.same_weights() #行動決定q_functionと価値計算target_q_functionのQnetworkを同じにする 
+    target_q_function=q_function.model2
+
+    sep = total_episode*0.1
     if np.random.random() > 0.5:
         B = CPU
         W = ME
