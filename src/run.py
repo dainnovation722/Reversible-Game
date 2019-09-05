@@ -46,7 +46,7 @@ def train_q_function(q_function, memory, optimizer,
             t[np.arange(len(t)), a] += r + gamma * \
                 max_q_s_a_dash - t[np.arange(len(t)), a]
 
-            loss = F.mean_absolute_error(q_s, t)
+            loss = F.mean_squared_error(q_s, t)
 
             q_function.cleargrads() #パラメータの勾配を初期化
             loss.backward() #損失関数の値を元に、パラメータの更新量を計算
