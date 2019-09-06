@@ -4,9 +4,12 @@ from tqdm import tqdm
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
+plt.rcParams["font.size"] = 15
+plt.tight_layout()
 from keras.models import Sequential
-from keras.layers import Dense, Activation
+from keras.layers import Dense, Activation, BatchNormalization
 from time import time 
+import os 
 t1 = time()
 total_episode = 10000 #訓練回数
 
@@ -15,11 +18,15 @@ class QFunction():
     def __init__(self,summary=False):
         self.model = Sequential([
             Dense(128, activation='linear', input_shape=(64,)),
+            BatchNormalization(),
+            Dense(128, activation='linear'),
             Dense(128, activation='linear'),
             Dense(65, activation='linear')
         ])
         self.model2 = Sequential([
             Dense(128, activation='linear', input_shape=(64,)),
+            BatchNormalization(),
+            Dense(128, activation='linear'),
             Dense(128, activation='linear'),
             Dense(65, activation='linear')
         ])
@@ -99,7 +106,7 @@ for episode in tqdm(range(total_episode)):
     q_function.same_weights() #行動決定q_functionと価値計算target_q_functionのQnetworkを同じにする 
     target_q_function=q_function.model2
 
-    sep = total_episode*0.1
+    sep = total_episode*0.2
     if np.random.random() > 0.5:
         B = CPU
         W = ME
@@ -122,10 +129,15 @@ for episode in tqdm(range(total_episode)):
 
 winning_Q = np.array(ME.record)==1
 
+if not os.path.exists("results"):
+    os.mkdir("results")
+
 plt.grid(True)
 plt.ylim(0, 1)
+plt.xlabel("epochs")
+plt.ylabel("win rate")
 plt.plot(np.cumsum(winning_Q) / (np.arange(len(winning_Q)) + 1))
-plt.savefig("winning_plot.png")
-
+plt.savefig("results/winning_plot_BNlayer.png")
 Time = time() - t1
 print("Execution Time : {:.3f} minutes".format(Time/60))
+

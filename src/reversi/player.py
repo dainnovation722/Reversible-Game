@@ -114,7 +114,7 @@ class RandomPlayer(Player):
 class NNQPlayer(Player):
 
     def __init__(self, name, q_function, memory,
-                 reward_win=1., reward_draw=0., reward_lose=-1.,
+                 reward_win=1., reward_draw=0., reward_lose=-5.,
                  eps=0.05):
         self.name = name
         self.reward_win = reward_win
@@ -148,7 +148,7 @@ class NNQPlayer(Player):
                 if max_q < q[i]:
                     max_q = q[i]
                     hand = i
-                    
+
         if self.s_last is not None: #状態sと行動handを記憶
             self.memory.append(self.s_last, self.a_last, s, 0, 0)
         self.s_last = s
