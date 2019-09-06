@@ -8,7 +8,7 @@ from keras.models import Sequential
 from keras.layers import Dense, Activation
 from time import time 
 t1 = time()
-total_episode = 100 #訓練回数
+total_episode = 10000 #訓練回数
 
 class QFunction():
 
@@ -36,7 +36,6 @@ class QFunction():
         
 def train_q_function(q_function, memory, target_q_function,
                      batch_size=32, gamma=0.9, n_epoch=1):
-    tt_0=time()
         
     for e in range(n_epoch): #1つの試合の経験値(memory)から学び取る回数
         perm = np.random.permutation(len(memory)) #memoryのデータは時系列データなのでデータ間に相関が出ないようにrandom samplingする
@@ -58,7 +57,7 @@ def train_q_function(q_function, memory, target_q_function,
                 max_q_s_a_dash 
             
             q_function.model.fit(x, t, verbose=0) #学習        
-    print("set_weightst time : {:.3f}s".format(time()-tt_0))        
+       
 class Memory(object):
 
     def __init__(self, size=128):
@@ -89,7 +88,7 @@ class Memory(object):
         self.write(ind, s, a, s_dash, r, e)
         self.counter += 1
 
-q_function = QFunction()
+q_function = QFunction(summary=True)
 memory = Memory(size=128)
 
 CPU = reversi.player.RandomPlayer('ランダム')
@@ -111,10 +110,10 @@ for episode in tqdm(range(total_episode)):
     game = reversi.Reversi(B,W)
     game.main_loop(episode=episode, print_game=False)
     train_q_function(q_function, memory, target_q_function)
-    if episode%sep==0:
-        print("WinCounts ME:{} Enemy:{} Draw:{}, rate:{:.3f}".format(\
-            ME.record.count(1),CPU.record.count(1),CPU.record.count(0),\
-            sum(ME.record)/len(ME.record)))
+    # if episode%sep==0:
+    #     print("WinCounts ME:{} Enemy:{} Draw:{}, rate:{:.3f}".format(\
+    #         ME.record.count(1),CPU.record.count(1),CPU.record.count(0),\
+    #         sum(ME.record)/len(ME.record)))
 
 # game = reversi.Reversi(CPU,ME)
 # game.main_loop(print_game=True)

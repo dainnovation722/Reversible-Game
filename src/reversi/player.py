@@ -142,11 +142,13 @@ class NNQPlayer(Player):
         else:
             x = np.array(s).reshape(1,64) 
             q = self.q_function.model.predict(x).reshape(-1) #shape(65,)で返る(パスq値1変数+盤目q値64変数)
-            q_nopass = q[1:]
-            q_nopass[np.where(np.array(s)!=0)] = -np.inf
-            q[1:] = q_nopass
-            hand = np.argmax(q)
-        
+            max_q = -np.inf
+            hand = 0
+            for i in possible_hand:
+                if max_q < q[i]:
+                    max_q = q[i]
+                    hand = i
+                    
         if self.s_last is not None: #状態sと行動handを記憶
             self.memory.append(self.s_last, self.a_last, s, 0, 0)
         self.s_last = s
