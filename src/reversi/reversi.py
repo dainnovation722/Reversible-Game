@@ -45,7 +45,7 @@ class Reversi(object):
 
         while True:
             state = self.board.get_status()
-            board, possible_hand, next_color, winner = state.split(',') 
+            board, last_hand, next_color, winner = state.split(',') 
             
             if winner != ReversiBoard.BLANK:
                 break

@@ -7,26 +7,31 @@ import matplotlib.pyplot as plt
 plt.rcParams["font.size"] = 15
 plt.tight_layout()
 from keras.models import Sequential
-from keras.layers import Dense, Activation, BatchNormalization
+from keras.layers import Dense, Activation, Dropout, Flatten
+from keras.layers.convolutional import Conv2D
 from time import time 
 import os 
 t1 = time()
-total_episode = 10000 #訓練回数
+total_episode = 100 #訓練回数
 
 class QFunction():
 
     def __init__(self,summary=False):
         self.model = Sequential([
-            Dense(128, activation='linear', input_shape=(64,)),
-            BatchNormalization(),
-            Dense(128, activation='linear'),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
+            Flatten(),
             Dense(128, activation='linear'),
             Dense(65, activation='linear')
         ])
         self.model2 = Sequential([
-            Dense(128, activation='linear', input_shape=(64,)),
-            BatchNormalization(),
-            Dense(128, activation='linear'),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
+            Flatten(),
             Dense(128, activation='linear'),
             Dense(65, activation='linear')
         ])
@@ -35,22 +40,44 @@ class QFunction():
         self.model2.compile(optimizer='adagrad', loss='mse')
         
         if summary:
+            input_shape=(None,3,8,8)
+            self.model.build(input_shape)
             print(self.model.summary())
 
     def same_weights(self):
         self.model2.set_weights(self.model.get_weights())
         
-        
+def s2input(state, possible_hand):
+
+    matrix = np.array(state)
+    
+    for i in range(state.shape[0]):
+        each_matrix = matrix[i]
+        each_me_location = matrix[i].reshape(8,8)
+        each_opponent_location = matrix[i].reshape(8,8)
+        each_possible_hand = possible_hand[i]
+
+        each_me_location[each_me_location!=1] = 0 #自分のマスを1,それ以外のマスを0で埋める
+        each_opponent_location[each_opponent_location!=1] = 0 #敵のマスを1,それ以外のマスを0で埋める 
+        each_possible_location = np.array([1 if i in list(map(lambda x:x-1, each_possible_hand)) else 0 \
+            for i,j in enumerate(each_matrix) ]).reshape(8,8) #置けるマスを1,それ以外のマスを0で埋める
+        if i ==0:
+            data = np.array([each_me_location,each_opponent_location,each_possible_location])[np.newaxis,:,:,:]
+        else:
+            data = np.concatenate([data,np.array([each_me_location,each_opponent_location,each_possible_location])[np.newaxis,:,:,:]],axis=0)
+    return data
+       
 def train_q_function(q_function, memory, target_q_function,
                      batch_size=32, gamma=0.9, n_epoch=1):
         
     for e in range(n_epoch): #1つの試合の経験値(memory)から学び取る回数
         perm = np.random.permutation(len(memory)) #memoryのデータは時系列データなのでデータ間に相関が出ないようにrandom samplingする
         for i in range(0, len(memory), batch_size):
-            s, a, s_dash, r, e = memory.read(perm[i:i+batch_size])
             
-            x = s.astype(np.float32)
-            x_dash = s_dash.astype(np.float32)
+            s, a, p, s_dash, p_dash, r, e = memory.read(perm[i:i+batch_size])
+            
+            x = s2input(s, p).astype(np.float32)
+            x_dash = s2input(s_dash, p_dash).astype(np.float32)
             
             q_s = q_function.model.predict(x) #現状態sのq値候補(行動決定)
             q_s_dash = q_function.model.predict(x_dash) #未来状態s_dashのq値候補(価値決定の)
@@ -64,35 +91,55 @@ def train_q_function(q_function, memory, target_q_function,
                 max_q_s_a_dash 
             
             q_function.model.fit(x, t, verbose=0) #学習        
-       
+
+def zerocut(l):
+    cutted = []
+    for i in range(l.shape[0]):
+        each_l = l[i]
+        a=[]
+        for i,j in enumerate(each_l):
+            if i>=1 and j==0:
+                break
+            a.append(j)
+        cutted.append(a)
+    return cutted
+
 class Memory(object):
 
     def __init__(self, size=128):
         self.size = size
-        self.memory = np.empty((size, 131), dtype=np.float32)
+        self.memory = np.zeros((size, 253), dtype=np.float32)
         self.counter = 0
 
     def __len__(self):
         return min(self.size, self.counter)
-
+        
     def read(self, ind):
         s = self.memory[ind, :64].astype(np.int32)
         a = self.memory[ind, 64].astype(np.int32)
-        s_dash = self.memory[ind, 65:129].astype(np.int32)
-        r = self.memory[ind, 129]
-        e = self.memory[ind, 130]
-        return s, a, s_dash, r, e
+        p = self.memory[ind, 65:126] #possible_handは最大61個(？)
+        p = zerocut(p)
+        s_dash = self.memory[ind, 126:190].astype(np.int32)
+        p_dash = self.memory[ind, 190:251]
+        p_dash = zerocut(p_dash)
+        r = self.memory[ind, 251]
+        e = self.memory[ind, 252]
+        return s, a, p, s_dash, p_dash, r, e
 
-    def write(self, ind, s, a, s_dash, r, e):
+    def write(self, ind, s, a, p, s_dash, p_dash, r, e):
         self.memory[ind, :64] = s
         self.memory[ind, 64] = a
-        self.memory[ind, 65:129] = s_dash
-        self.memory[ind, 129] = r
-        self.memory[ind, 130] = e
+        p = p+[0]*(61-len(p))
+        self.memory[ind, 65:126] = p
+        self.memory[ind, 126:190] = s_dash
+        p_dash = p_dash+[0]*(61-len(p_dash))
+        self.memory[ind, 190:251] = p_dash
+        self.memory[ind, 251] = r
+        self.memory[ind, 252] = e
 
-    def append(self, s, a, s_dash, r, e):
+    def append(self, s, a, p, s_dash, p_dash, r, e):
         ind = self.counter % self.size
-        self.write(ind, s, a, s_dash, r, e)
+        self.write(ind, s, a, p, s_dash, p_dash, r, e)
         self.counter += 1
 
 q_function = QFunction(summary=True)
@@ -141,3 +188,7 @@ plt.savefig("results/winning_plot_BNlayer.png")
 Time = time() - t1
 print("Execution Time : {:.3f} minutes".format(Time/60))
 
+#学習済みモデルの保存
+# json_string = q_function.model.to_json()
+# open(os.path.join('./', 'cnn_model.json'), 'w').write(json_string)
+# model.save_weights(os.path.join('./', 'cnn_model_weight.hdf5'))

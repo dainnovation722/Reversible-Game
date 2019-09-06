@@ -3,7 +3,7 @@ from abc import abstractclassmethod
 from reversi.board import ReversiBoard
 import random
 import numpy as np
-
+from copy import deepcopy
 
 class Player(ABC):
 
@@ -94,7 +94,7 @@ class RandomPlayer(Player):
         self.reward_draw = reward_draw
         self.reward_lose = reward_lose
         self.record = []
-
+        
     def action(self, state, possible_hand, episode):
         hand = random.choice(possible_hand.split(',')) #listからrandomに位置(str型)を選択
         action = '{}_{}'.format(self.color, hand)
@@ -114,7 +114,7 @@ class RandomPlayer(Player):
 class NNQPlayer(Player):
 
     def __init__(self, name, q_function, memory,
-                 reward_win=1., reward_draw=0., reward_lose=-5.,
+                 reward_win=1., reward_draw=0., reward_lose=-1.,
                  eps=0.05):
         self.name = name
         self.reward_win = reward_win
@@ -127,20 +127,31 @@ class NNQPlayer(Player):
 
         self.s_last = None
         self.a_last = None
+        self.possible_last = None
 
         self.record = []
+
 
     def action(self, state, possible_hand, episode):
         state = state.split(',')[0]
         state = [i for i in state if i in ['b','w','-']]
         s = [(0 if i == '-' else (1 if i == self.color else -1)) for i in state]
         possible_hand = [int(i) for i in possible_hand.split(',')]
+  
+        matrix = np.array(s).reshape(8,8)
+        me_location = deepcopy(matrix)
+        opponent_location = -deepcopy(matrix)      
+
+        me_location[me_location!=1] = 0 #自分のマスを1,それ以外のマスを0で埋める
+        opponent_location[opponent_location!=1] = 0 #敵のマスを1,それ以外のマスを0で埋める 
+        possible_location = np.array([1 if i in list(map(lambda x:x-1, possible_hand)) else 0 \
+            for i,j in enumerate(matrix.reshape(-1)) ]).reshape(8,8) #置けるマスを1,それ以外のマスを0で埋める
 
         epsilon = 0.5 * (1 / (episode+1)) #徐々に最適行動のみをとるε-greedy法
         if np.random.random() < epsilon:
             hand = random.choice(possible_hand)
         else:
-            x = np.array(s).reshape(1,64) 
+            x=np.array([me_location,opponent_location,possible_location])[np.newaxis,:,:,:]
             q = self.q_function.model.predict(x).reshape(-1) #shape(65,)で返る(パスq値1変数+盤目q値64変数)
             max_q = -np.inf
             hand = 0
@@ -150,10 +161,10 @@ class NNQPlayer(Player):
                     hand = i
 
         if self.s_last is not None: #状態sと行動handを記憶
-            self.memory.append(self.s_last, self.a_last, s, 0, 0)
+            self.memory.append(self.s_last, self.a_last, self.possible_last, s, possible_hand, 0, 0)
         self.s_last = s
         self.a_last = hand
-
+        self.possible_last = possible_hand
         action = '{}_{}'.format(self.color, hand)
         return action 
     
@@ -168,11 +179,13 @@ class NNQPlayer(Player):
             r = self.reward_draw
         else:
             r = self.reward_lose
-
-        self.memory.append(self.s_last, self.a_last, s, r, 1)
+        
+        possible_hand = [0]
+        self.memory.append(self.s_last, self.a_last, self.possible_last, s, possible_hand, r, 1)
 
         self.s_last = None
         self.a_last = None
+        self.possible_last = None
 
         self.record.append(r) 
 
