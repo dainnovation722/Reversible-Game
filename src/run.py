@@ -1,3 +1,4 @@
+  
 import sys
 import reversi
 from tqdm import tqdm
@@ -7,7 +8,7 @@ import chainer.links as L
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
-total_episode = 100 #訓練回数
+total_episode = 10000 #訓練回数
 
 class QFunction(chainer.Chain):
 
@@ -27,7 +28,7 @@ class QFunction(chainer.Chain):
 
 def train_q_function(q_function, memory, optimizer,
                      batch_size=32, gamma=0.9, n_epoch=1):
-    q_function_copy = copy.deepcopy(q_function)
+    target_q_function = copy.deepcopy(q_function)
     sum_loss = 0
     for e in range(n_epoch):
         perm = np.random.permutation(len(memory))
@@ -37,14 +38,16 @@ def train_q_function(q_function, memory, optimizer,
             x_dash = s_dash.astype(np.float32)
 
             q_s = q_function(x)
-            q_s_dash = q_function_copy(x_dash).data
+            q_s_dash = q_function(x_dash).data
 
-            max_q_s_a_dash = np.max(q_s_dash, axis=1)
+            max_q_s_a_dash_index = np.argmax(q_s_dash, axis=1).reshape(-1)
+            max_q_s_a_dash = target_q_function(x_dash).data
+            max_q_s_a_dash = np.array([max_q_s_a_dash[i,j] for i,j in enumerate(max_q_s_a_dash_index)])
             max_q_s_a_dash[e == 1] == 0
 
             t = q_s.data.copy()
             t[np.arange(len(t)), a] += r + gamma * \
-                max_q_s_a_dash - t[np.arange(len(t)), a]
+                max_q_s_a_dash 
 
             loss = F.mean_squared_error(q_s, t)
 
@@ -104,7 +107,7 @@ for episode in tqdm(range(total_episode)):
         W = CPU
 
     game = reversi.Reversi(B,W)
-    game.main_loop(print_game=False)
+    game.main_loop(print_game=False, episode=episode)
     loss = train_q_function(q_function, memory, optimizer)
 
 game = reversi.Reversi(CPU,ME)
@@ -117,6 +120,4 @@ wininig_Q = np.array(ME.record) == 1
 plt.grid(True)
 plt.ylim(0, 1)
 plt.plot(np.cumsum(wininig_Q) / (np.arange(len(wininig_Q)) + 1))
-plt.savefig("winning_plot.png")
-
-
+plt.savefig("winning_plot_greedy.png")
