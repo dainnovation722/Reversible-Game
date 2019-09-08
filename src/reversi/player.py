@@ -127,7 +127,7 @@ class NNQPlayer(Player):
 
         self.s_last = None
         self.a_last = None
-        self.possible_last = None
+        self.possible_location_last = None
 
         self.record = []
 
@@ -141,12 +141,15 @@ class NNQPlayer(Player):
         matrix = np.array(s).reshape(8,8)
         me_location = deepcopy(matrix)
         opponent_location = -deepcopy(matrix)      
-
+        
         me_location[me_location!=1] = 0 #自分のマスを1,それ以外のマスを0で埋める
         opponent_location[opponent_location!=1] = 0 #敵のマスを1,それ以外のマスを0で埋める 
-        possible_location = np.array([1 if i in list(map(lambda x:x-1, possible_hand)) else 0 \
-            for i,j in enumerate(matrix.reshape(-1)) ]).reshape(8,8) #置けるマスを1,それ以外のマスを0で埋める
-
+        if possible_hand  == [0]: #可能な手がパスしかないときは全マス0で埋める
+            possible_location = np.zeros((8,8), dtype=int)
+        else:
+            possible_location = np.array([1 if i in list(map(lambda x:x-1, possible_hand)) else 0 \
+                for i,j in enumerate(matrix.reshape(-1)) ]).reshape(8,8) #置けるマスを1,それ以外のマスを0で埋める
+        
         epsilon = 0.5 * (1 / (episode+1)) #徐々に最適行動のみをとるε-greedy法
         if np.random.random() < epsilon:
             hand = random.choice(possible_hand)
@@ -159,13 +162,18 @@ class NNQPlayer(Player):
                 if max_q < q[i]:
                     max_q = q[i]
                     hand = i
+        
+        if hand == 0: #行動がパス(0)ならmemoryデータベースを更新しない
+            return '{}_{}'.format(self.color, hand)
 
+        possible_location = possible_location.reshape(-1) #memory用に次元変換
         if self.s_last is not None: #状態sと行動handを記憶
-            self.memory.append(self.s_last, self.a_last, self.possible_last, s, possible_hand, 0, 0)
+            self.memory.append(self.s_last, self.a_last, self.possible_location_last, s, possible_location, 0, 0)
         self.s_last = s
         self.a_last = hand
-        self.possible_last = possible_hand
+        self.possible_location_last = possible_location
         action = '{}_{}'.format(self.color, hand)
+        
         return action 
     
     def finalize(self, state, winner):
@@ -179,13 +187,13 @@ class NNQPlayer(Player):
             r = self.reward_draw
         else:
             r = self.reward_lose
-        
-        possible_hand = [0]
-        self.memory.append(self.s_last, self.a_last, self.possible_last, s, possible_hand, r, 1)
+            
+        possible_location = np.zeros(shape=(64,),dtype=int)
+        self.memory.append(self.s_last, self.a_last, self.possible_location_last, s, possible_location, r, 1)
 
         self.s_last = None
         self.a_last = None
-        self.possible_last = None
+        self.possible_location_last = None
 
         self.record.append(r) 
 

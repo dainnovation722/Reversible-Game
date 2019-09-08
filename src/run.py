@@ -9,8 +9,11 @@ plt.tight_layout()
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Dropout, Flatten
 from keras.layers.convolutional import Conv2D
+from keras.optimizers import SGD
+from keras import regularizers
 from time import time 
 import os 
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 t1 = time()
 total_episode = 100 #訓練回数
 
@@ -18,36 +21,35 @@ class QFunction():
 
     def __init__(self,summary=False):
         self.model = Sequential([
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4),input_shape=(3,8,8)),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
             Flatten(),
-            Dense(128, activation='linear'),
-            Dense(65, activation='linear')
+            Dense(128, activation='linear',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
+            Dense(65, activation='linear',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4))
         ])
         self.model2 = Sequential([
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4),input_shape=(3,8,8)),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
             Flatten(),
-            Dense(128, activation='linear'),
-            Dense(65, activation='linear')
+            Dense(128, activation='linear',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
+            Dense(65, activation='linear',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4))
         ])
-        
-        self.model.compile(optimizer='adagrad', loss='mse')
-        self.model2.compile(optimizer='adagrad', loss='mse')
+        sgd = SGD(lr=0.1, decay=1e-6, momentum=0.95, nesterov=False)
+        self.model.compile(optimizer='sgd', loss='mse')
+        self.model2.compile(optimizer='sgd', loss='mse')
         
         if summary:
-            input_shape=(None,3,8,8)
-            self.model.build(input_shape)
             print(self.model.summary())
+            
 
     def same_weights(self):
         self.model2.set_weights(self.model.get_weights())
         
-def s2input(state, possible_hand):
+def s2input(state, possible_location):
 
     matrix = np.array(state)
     
@@ -55,16 +57,16 @@ def s2input(state, possible_hand):
         each_matrix = matrix[i]
         each_me_location = matrix[i].reshape(8,8)
         each_opponent_location = matrix[i].reshape(8,8)
-        each_possible_hand = possible_hand[i]
+        each_possible_location = possible_location[i].reshape(8,8)
 
         each_me_location[each_me_location!=1] = 0 #自分のマスを1,それ以外のマスを0で埋める
         each_opponent_location[each_opponent_location!=1] = 0 #敵のマスを1,それ以外のマスを0で埋める 
-        each_possible_location = np.array([1 if i in list(map(lambda x:x-1, each_possible_hand)) else 0 \
-            for i,j in enumerate(each_matrix) ]).reshape(8,8) #置けるマスを1,それ以外のマスを0で埋める
+
         if i ==0:
             data = np.array([each_me_location,each_opponent_location,each_possible_location])[np.newaxis,:,:,:]
         else:
             data = np.concatenate([data,np.array([each_me_location,each_opponent_location,each_possible_location])[np.newaxis,:,:,:]],axis=0)
+    
     return data
        
 def train_q_function(q_function, memory, target_q_function,
@@ -73,6 +75,7 @@ def train_q_function(q_function, memory, target_q_function,
     for e in range(n_epoch): #1つの試合の経験値(memory)から学び取る回数
         perm = np.random.permutation(len(memory)) #memoryのデータは時系列データなのでデータ間に相関が出ないようにrandom samplingする
         for i in range(0, len(memory), batch_size):
+            
             
             s, a, p, s_dash, p_dash, r, e = memory.read(perm[i:i+batch_size])
             
@@ -92,23 +95,11 @@ def train_q_function(q_function, memory, target_q_function,
             
             q_function.model.fit(x, t, verbose=0) #学習        
 
-def zerocut(l):
-    cutted = []
-    for i in range(l.shape[0]):
-        each_l = l[i]
-        a=[]
-        for i,j in enumerate(each_l):
-            if i>=1 and j==0:
-                break
-            a.append(j)
-        cutted.append(a)
-    return cutted
-
 class Memory(object):
 
     def __init__(self, size=128):
         self.size = size
-        self.memory = np.zeros((size, 253), dtype=np.float32)
+        self.memory = np.zeros((size, 259), dtype=np.float32)
         self.counter = 0
 
     def __len__(self):
@@ -117,25 +108,22 @@ class Memory(object):
     def read(self, ind):
         s = self.memory[ind, :64].astype(np.int32)
         a = self.memory[ind, 64].astype(np.int32)
-        p = self.memory[ind, 65:126] #possible_handは最大61個(？)
-        p = zerocut(p)
-        s_dash = self.memory[ind, 126:190].astype(np.int32)
-        p_dash = self.memory[ind, 190:251]
-        p_dash = zerocut(p_dash)
-        r = self.memory[ind, 251]
-        e = self.memory[ind, 252]
+        p = self.memory[ind, 65:129] #possible_handは最大61個(？)
+        
+        s_dash = self.memory[ind, 129:193].astype(np.int32)
+        p_dash = self.memory[ind, 193:257]
+        r = self.memory[ind, 257]
+        e = self.memory[ind, 258]
         return s, a, p, s_dash, p_dash, r, e
 
     def write(self, ind, s, a, p, s_dash, p_dash, r, e):
         self.memory[ind, :64] = s
         self.memory[ind, 64] = a
-        p = p+[0]*(61-len(p))
-        self.memory[ind, 65:126] = p
-        self.memory[ind, 126:190] = s_dash
-        p_dash = p_dash+[0]*(61-len(p_dash))
-        self.memory[ind, 190:251] = p_dash
-        self.memory[ind, 251] = r
-        self.memory[ind, 252] = e
+        self.memory[ind, 65:129] = p
+        self.memory[ind, 129:193] = s_dash
+        self.memory[ind, 193:257] = p_dash
+        self.memory[ind, 257] = r
+        self.memory[ind, 258] = e
 
     def append(self, s, a, p, s_dash, p_dash, r, e):
         ind = self.counter % self.size
