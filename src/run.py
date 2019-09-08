@@ -15,7 +15,7 @@ from time import time
 import os 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 t1 = time()
-total_episode = 30 #訓練回数
+total_episode = 100 #訓練回数
 
 class QFunction():
 
@@ -166,11 +166,11 @@ plt.ylim(0, 1)
 plt.xlabel("epochs")
 plt.ylabel("win rate")
 plt.plot(np.cumsum(winning_Q) / (np.arange(len(winning_Q)) + 1))
-# plt.savefig("results/winning_plot_BNlayer.png")
+plt.savefig("results/winning_plot.png")
 Time = time() - t1
 print("Execution Time : {:.3f} minutes".format(Time/60))
 
 #学習済みモデルの保存
 # json_string = q_function.model.to_json()
 # open(os.path.join('./', 'cnn_model.json'), 'w').write(json_string)
-# model.save_weights(os.path.join('./', 'cnn_model_weight.hdf5'))
+model.save_weights(os.path.join('./', 'cnn_model_weight.hdf5'))
