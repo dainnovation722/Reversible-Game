@@ -21,7 +21,7 @@ class QFunction():
 
     def __init__(self,summary=False):
         self.model = Sequential([
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4),input_shape=(3,8,8)),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4),input_shape=(2,8,8)),
             Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
             Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
             Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
@@ -30,7 +30,7 @@ class QFunction():
             Dense(65, activation='linear',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4))
         ])
         self.model2 = Sequential([
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4),input_shape=(3,8,8)),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4),input_shape=(2,8,8)),
             Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
             Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
             Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
@@ -49,7 +49,7 @@ class QFunction():
     def same_weights(self):
         self.model2.set_weights(self.model.get_weights())
         
-def s2input(state, possible_location):
+def s2input(state):
 
     matrix = np.array(state)
     
@@ -57,15 +57,14 @@ def s2input(state, possible_location):
         each_matrix = matrix[i]
         each_me_location = matrix[i].reshape(8,8)
         each_opponent_location = matrix[i].reshape(8,8)
-        each_possible_location = possible_location[i].reshape(8,8)
-
+        
         each_me_location[each_me_location!=1] = 0 #自分のマスを1,それ以外のマスを0で埋める
         each_opponent_location[each_opponent_location!=1] = 0 #敵のマスを1,それ以外のマスを0で埋める 
 
         if i ==0:
-            data = np.array([each_me_location,each_opponent_location,each_possible_location])[np.newaxis,:,:,:]
+            data = np.array([each_me_location,each_opponent_location])[np.newaxis,:,:,:]
         else:
-            data = np.concatenate([data,np.array([each_me_location,each_opponent_location,each_possible_location])[np.newaxis,:,:,:]],axis=0)
+            data = np.concatenate([data,np.array([each_me_location,each_opponent_location])[np.newaxis,:,:,:]],axis=0)
     
     return data
        
@@ -77,10 +76,10 @@ def train_q_function(q_function, memory, target_q_function,
         for i in range(0, len(memory), batch_size):
             
             
-            s, a, p, s_dash, p_dash, r, e = memory.read(perm[i:i+batch_size])
+            s, a, s_dash, r, e = memory.read(perm[i:i+batch_size])
             
-            x = s2input(s, p).astype(np.float32)
-            x_dash = s2input(s_dash, p_dash).astype(np.float32)
+            x = s2input(s).astype(np.float32)
+            x_dash = s2input(s_dash).astype(np.float32)
             
             q_s = q_function.model.predict(x) #現状態sのq値候補(行動決定)
             q_s_dash = q_function.model.predict(x_dash) #未来状態s_dashのq値候補(価値決定の)
@@ -99,7 +98,7 @@ class Memory(object):
 
     def __init__(self, size=128):
         self.size = size
-        self.memory = np.zeros((size, 259), dtype=np.float32)
+        self.memory = np.zeros((size, 131), dtype=np.float32)
         self.counter = 0
 
     def __len__(self):
@@ -107,27 +106,22 @@ class Memory(object):
         
     def read(self, ind):
         s = self.memory[ind, :64].astype(np.int32)
-        a = self.memory[ind, 64].astype(np.int32)
-        p = self.memory[ind, 65:129] #possible_handは最大61個(？)
-        
-        s_dash = self.memory[ind, 129:193].astype(np.int32)
-        p_dash = self.memory[ind, 193:257]
-        r = self.memory[ind, 257]
-        e = self.memory[ind, 258]
-        return s, a, p, s_dash, p_dash, r, e
+        a = self.memory[ind, 64].astype(np.int32) 
+        s_dash = self.memory[ind, 65:129].astype(np.int32)
+        r = self.memory[ind, 129]
+        e = self.memory[ind, 130]
+        return s, a, s_dash, r, e
 
-    def write(self, ind, s, a, p, s_dash, p_dash, r, e):
+    def write(self, ind, s, a, s_dash, r, e):
         self.memory[ind, :64] = s
         self.memory[ind, 64] = a
-        self.memory[ind, 65:129] = p
-        self.memory[ind, 129:193] = s_dash
-        self.memory[ind, 193:257] = p_dash
-        self.memory[ind, 257] = r
-        self.memory[ind, 258] = e
+        self.memory[ind, 65:129] = s_dash
+        self.memory[ind, 129] = r
+        self.memory[ind, 130] = e
 
-    def append(self, s, a, p, s_dash, p_dash, r, e):
+    def append(self, s, a, s_dash, r, e):
         ind = self.counter % self.size
-        self.write(ind, s, a, p, s_dash, p_dash, r, e)
+        self.write(ind, s, a, s_dash, r, e)
         self.counter += 1
 
 q_function = QFunction(summary=True)
