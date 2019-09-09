@@ -7,38 +7,41 @@ import matplotlib.pyplot as plt
 plt.rcParams["font.size"] = 15
 plt.tight_layout()
 from keras.models import Sequential
-from keras.layers import Dense, Activation, Dropout, Flatten
+from keras.layers import Dense, Activation, Dropout, Flatten, BatchNormalization
 from keras.layers.convolutional import Conv2D
-from keras.optimizers import SGD
+from keras.optimizers import Adam
 from keras import regularizers
 from time import time 
 import os 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 t1 = time()
-total_episode = 100 #訓練回数
+total_episode = 10000 #訓練回数
 
 class QFunction():
 
     def __init__(self,summary=False):
         self.model = Sequential([
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4),input_shape=(2,8,8)),
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',input_shape=(2,8,8)),
+            BatchNormalization(),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
             Flatten(),
-            Dense(128, activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
-            Dense(64, activation='softmax',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4))
+            Dense(128, activation='relu'),
+            Dense(64, activation='softmax'),
+            BatchNormalization()
         ])
         self.model2 = Sequential([
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4),input_shape=(2,8,8)),
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',input_shape=(2,8,8)),
+            BatchNormalization(),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
             Flatten(),
-            Dense(128, activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
-            Dense(64, activation='softmax',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4))
+            Dense(128, activation='relu'),
+            Dense(64, activation='softmax'),
+            BatchNormalization()
         ])
-        sgd = SGD(lr=0.1, decay=1e-6, momentum=0.95, nesterov=False)
         self.model.compile(optimizer='sgd', loss='mse')
         self.model2.compile(optimizer='sgd', loss='mse')
         
@@ -69,7 +72,7 @@ def s2input(state):
     return data
        
 def train_q_function(q_function, memory, target_q_function,
-                     batch_size=32, gamma=0.9, n_epoch=1):
+                     batch_size=32, gamma=0.9, n_epoch=20):
         
     for e in range(n_epoch): #1つの試合の経験値(memory)から学び取る回数
         perm = np.random.permutation(len(memory)) #memoryのデータは時系列データなのでデータ間に相関が出ないようにrandom samplingする
@@ -135,7 +138,6 @@ for episode in tqdm(range(total_episode)):
     q_function.same_weights() #行動決定q_functionと価値計算target_q_functionのQnetworkを同じにする 
     target_q_function=q_function.model2
 
-    sep = total_episode*0.2
     if np.random.random() > 0.5:
         B = CPU
         W = ME
@@ -146,16 +148,13 @@ for episode in tqdm(range(total_episode)):
     game = reversi.Reversi(B,W)
     game.main_loop(episode=episode, print_game=False)
     train_q_function(q_function, memory, target_q_function)
-    # if episode%sep==0:
-    #     print("WinCounts ME:{} Enemy:{} Draw:{}, rate:{:.3f}".format(\
-    #         ME.record.count(1),CPU.record.count(1),CPU.record.count(0),\
-    #         sum(ME.record)/len(ME.record)))
-
-game = reversi.Reversi(CPU,ME)
-game.main_loop(print_game=True)
+    sep = total_episode*0.1
+    if episode%sep==0:
+        print("WinCounts ME:{} Enemy:{} Draw:{}, rate:{:.3f}".format(\
+            ME.record.count(1),CPU.record.count(1),CPU.record.count(0),\
+            sum(np.array(ME.record)==1)/len(ME.record)))
 
 # 勝率の変化
-
 winning_Q = np.array(ME.record)==1
 
 if not os.path.exists("results"):
@@ -166,11 +165,11 @@ plt.ylim(0, 1)
 plt.xlabel("epochs")
 plt.ylabel("win rate")
 plt.plot(np.cumsum(winning_Q) / (np.arange(len(winning_Q)) + 1))
-plt.savefig("results/winning_plot.png")
+plt.savefig("results/winning_plot_2inputs_SGD_20epo.png")
 Time = time() - t1
 print("Execution Time : {:.3f} minutes".format(Time/60))
 
-#学習済みモデルの保存
-# json_string = q_function.model.to_json()
-# open(os.path.join('./', 'cnn_model.json'), 'w').write(json_string)
-model.save_weights(os.path.join('./', 'cnn_model_weight.hdf5'))
+# #学習済みモデルの保存
+if not os.path.exists("models"):
+    os.mkdir("models")
+q_function.model.save_weights('models/cnn_model_weight_2inputs_20epo.hdf5')
