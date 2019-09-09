@@ -156,13 +156,18 @@ class NNQPlayer(Player):
         else:
             x=np.array([me_location,opponent_location,possible_location])[np.newaxis,:,:,:]
             q = self.q_function.model.predict(x).reshape(-1) #shape(65,)で返る(パスq値1変数+盤目q値64変数)
+            #できる限りパスしないための実装(パスしか打つ手がない場合に限りパスを実行)
             max_q = -np.inf
-            hand = 0
-            for i in possible_hand:
-                if max_q < q[i]:
-                    max_q = q[i]
-                    hand = i
-        
+            if 0 in possible_hand: 
+                possible_hand.remove(0)
+            if possible_hand:
+                for i in possible_hand:
+                    if max_q < q[i-1]:
+                        max_q = q[i-1]
+                        hand = i
+            else:
+                hand = 0
+
         if hand == 0: #行動がパス(0)ならmemoryデータベースを更新しない
             return '{}_{}'.format(self.color, hand)
 

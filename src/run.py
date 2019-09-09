@@ -7,38 +7,42 @@ import matplotlib.pyplot as plt
 plt.rcParams["font.size"] = 15
 plt.tight_layout()
 from keras.models import Sequential
-from keras.layers import Dense, Activation, Dropout, Flatten
+from keras.layers import Dense, Activation, Dropout, Flatten, BatchNormalization
 from keras.layers.convolutional import Conv2D
-from keras.optimizers import SGD
+from keras.optimizers import Adam
 from keras import regularizers
 from time import time 
 import os 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 t1 = time()
-total_episode = 100 #訓練回数
+total_episode = 10 #訓練回数
 
 class QFunction():
 
     def __init__(self,summary=False):
         self.model = Sequential([
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4),input_shape=(3,8,8)),
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',input_shape=(3,8,8)),
+            BatchNormalization(),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
             Flatten(),
-            Dense(128, activation='linear',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
-            Dense(65, activation='linear',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4))
+            Dense(128, activation='relu'),
+            Dense(64, activation='softmax'),
+            BatchNormalization()
         ])
         self.model2 = Sequential([
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4),input_shape=(3,8,8)),
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',input_shape=(3,8,8)),
+            BatchNormalization(),
+            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
+            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
             Flatten(),
-            Dense(128, activation='linear',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4)),
-            Dense(65, activation='linear',kernel_initializer='he_normal',kernel_regularizer=regularizers.l2(5*10**-4))
+            Dense(128, activation='relu'),
+            Dense(64, activation='softmax'),
+            BatchNormalization()
         ])
-        sgd = SGD(lr=0.1, decay=1e-6, momentum=0.95, nesterov=False)
+        sgd = Adam(lr=0.1)
         self.model.compile(optimizer='sgd', loss='mse')
         self.model2.compile(optimizer='sgd', loss='mse')
         
@@ -54,7 +58,6 @@ def s2input(state, possible_location):
     matrix = np.array(state)
     
     for i in range(state.shape[0]):
-        each_matrix = matrix[i]
         each_me_location = matrix[i].reshape(8,8)
         each_opponent_location = matrix[i].reshape(8,8)
         each_possible_location = possible_location[i].reshape(8,8)
@@ -90,9 +93,11 @@ def train_q_function(q_function, memory, target_q_function,
             
             max_q_s_a_dash[e == 1] == 0 #試合終了の状態があれば次の状態は存在しないので次の状態で得られる最大報酬は0
             t = q_s.copy()
-            t[np.arange(len(t)), a] += r + gamma * \
+            t[np.arange(len(t)), a-1] += r + gamma * \
                 max_q_s_a_dash 
-            
+            if not np.all(x[0]):
+                print(f'x:{x[]}\n')
+                continue
             q_function.model.fit(x, t, verbose=0) #学習        
 
 class Memory(object):
@@ -141,7 +146,6 @@ for episode in tqdm(range(total_episode)):
     q_function.same_weights() #行動決定q_functionと価値計算target_q_functionのQnetworkを同じにする 
     target_q_function=q_function.model2
 
-    sep = total_episode*0.2
     if np.random.random() > 0.5:
         B = CPU
         W = ME
@@ -152,10 +156,12 @@ for episode in tqdm(range(total_episode)):
     game = reversi.Reversi(B,W)
     game.main_loop(episode=episode, print_game=False)
     train_q_function(q_function, memory, target_q_function)
-    # if episode%sep==0:
-    #     print("WinCounts ME:{} Enemy:{} Draw:{}, rate:{:.3f}".format(\
-    #         ME.record.count(1),CPU.record.count(1),CPU.record.count(0),\
-    #         sum(ME.record)/len(ME.record)))
+    
+    sep = total_episode*0.2
+    if episode%sep==0:
+        print("WinCounts ME:{} Enemy:{} Draw:{}, rate:{:.3f}".format(\
+            ME.record.count(1),CPU.record.count(1),CPU.record.count(0),\
+            sum(np.array(ME.record)==1)/len(ME.record)))
 
 # game = reversi.Reversi(CPU,ME)
 # game.main_loop(print_game=True)
@@ -172,11 +178,11 @@ plt.ylim(0, 1)
 plt.xlabel("epochs")
 plt.ylabel("win rate")
 plt.plot(np.cumsum(winning_Q) / (np.arange(len(winning_Q)) + 1))
-plt.savefig("results/winning_plot_BNlayer.png")
+plt.savefig("results/winning_plot_cnn_3inputs_BN_Adam.png")
 Time = time() - t1
 print("Execution Time : {:.3f} minutes".format(Time/60))
 
 #学習済みモデルの保存
-# json_string = q_function.model.to_json()
-# open(os.path.join('./', 'cnn_model.json'), 'w').write(json_string)
-# model.save_weights(os.path.join('./', 'cnn_model_weight.hdf5'))
+if not os.path.exists("models"):
+    os.mkdir("models")
+q_function.model.save_weights('models/cnn_model_weight.hdf5')
