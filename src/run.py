@@ -100,7 +100,7 @@ def train_q_function(q_function, memory, target_q_function,
             max_q_s_a_dash[e == 1] == 0 #試合終了の状態があれば次の状態は存在しないので次の状態で得られる最大報酬は0
             t = q_s.copy()
             t[np.arange(len(t)), a-1] += r + gamma * \
-                max_q_s_a_dash 
+                (max_q_s_a_dash  -  t[np.arange(len(t)), a-1])
             
             q_function.model.fit(x, t, verbose=0) #学習        
 
