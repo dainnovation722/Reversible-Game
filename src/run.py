@@ -1,3 +1,4 @@
+title='4C_cnn_3in_20fpe'
 import sys
 import reversi
 from tqdm import tqdm
@@ -15,7 +16,13 @@ from time import time
 import os 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 t1 = time()
-total_episode = 10 #訓練回数
+total_episode = 5000 #訓練回数
+
+if not os.path.exists("models"):
+    os.mkdir("models")
+if not os.path.exists("results"):
+    os.mkdir("results")
+
 
 class QFunction():
 
@@ -42,7 +49,6 @@ class QFunction():
             Dense(64, activation='softmax'),
             BatchNormalization()
         ])
-        sgd = Adam(lr=0.1)
         self.model.compile(optimizer='sgd', loss='mse')
         self.model2.compile(optimizer='sgd', loss='mse')
         
@@ -73,7 +79,7 @@ def s2input(state, possible_location):
     return data
        
 def train_q_function(q_function, memory, target_q_function,
-                     batch_size=32, gamma=0.9, n_epoch=1):
+                     batch_size=32, gamma=0.9, n_epoch=20):
         
     for e in range(n_epoch): #1つの試合の経験値(memory)から学び取る回数
         perm = np.random.permutation(len(memory)) #memoryのデータは時系列データなのでデータ間に相関が出ないようにrandom samplingする
@@ -95,9 +101,7 @@ def train_q_function(q_function, memory, target_q_function,
             t = q_s.copy()
             t[np.arange(len(t)), a-1] += r + gamma * \
                 max_q_s_a_dash 
-            if not np.all(x[0]):
-                print(f'x:{x[]}\n')
-                continue
+            
             q_function.model.fit(x, t, verbose=0) #学習        
 
 class Memory(object):
@@ -135,12 +139,24 @@ class Memory(object):
         self.write(ind, s, a, p, s_dash, p_dash, r, e)
         self.counter += 1
 
+def save(ME,CPU,q_function,title=None):
+    winning_Q = np.array(ME.record)==1    
+    print("WinCounts ME:{} Enemy:{} Draw:{}, rate:{:.3f}".format(\
+            ME.record.count(1),CPU.record.count(1),CPU.record.count(0),\
+            sum(np.array(ME.record)==1)/len(ME.record)))    
+    plt.grid(True)
+    plt.ylim(0, 1)
+    plt.xlabel("epochs")
+    plt.ylabel("win rate")
+    plt.plot(np.cumsum(winning_Q) / (np.arange(len(winning_Q)) + 1))
+    plt.savefig(f"results/{title}.png")
+    q_function.model.save_weights(f'models/{title}.hdf5')
+
 q_function = QFunction(summary=True)
 memory = Memory(size=128)
 
 CPU = reversi.player.RandomPlayer('ランダム')
 ME = reversi.player.NNQPlayer('Q太郎', q_function, memory)
-
 
 for episode in tqdm(range(total_episode)):
     q_function.same_weights() #行動決定q_functionと価値計算target_q_functionのQnetworkを同じにする 
@@ -156,33 +172,11 @@ for episode in tqdm(range(total_episode)):
     game = reversi.Reversi(B,W)
     game.main_loop(episode=episode, print_game=False)
     train_q_function(q_function, memory, target_q_function)
-    
-    sep = total_episode*0.2
+    sep = total_episode*0.1
+    save_sep = sep*0.1
     if episode%sep==0:
-        print("WinCounts ME:{} Enemy:{} Draw:{}, rate:{:.3f}".format(\
-            ME.record.count(1),CPU.record.count(1),CPU.record.count(0),\
-            sum(np.array(ME.record)==1)/len(ME.record)))
+        save(ME,CPU,q_function,title=title)    
 
-# game = reversi.Reversi(CPU,ME)
-# game.main_loop(print_game=True)
-
-# 勝率の変化
-
-winning_Q = np.array(ME.record)==1
-
-if not os.path.exists("results"):
-    os.mkdir("results")
-
-plt.grid(True)
-plt.ylim(0, 1)
-plt.xlabel("epochs")
-plt.ylabel("win rate")
-plt.plot(np.cumsum(winning_Q) / (np.arange(len(winning_Q)) + 1))
-plt.savefig("results/winning_plot_cnn_3inputs_BN_Adam.png")
 Time = time() - t1
 print("Execution Time : {:.3f} minutes".format(Time/60))
 
-#学習済みモデルの保存
-if not os.path.exists("models"):
-    os.mkdir("models")
-q_function.model.save_weights('models/cnn_model_weight.hdf5')
