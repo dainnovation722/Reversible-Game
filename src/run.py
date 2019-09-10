@@ -23,8 +23,6 @@ class QFunction():
         self.model = Sequential([
             Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',input_shape=(2,8,8)),
             BatchNormalization(),
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
             Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
             Flatten(),
             Dense(128, activation='relu'),
@@ -34,8 +32,6 @@ class QFunction():
         self.model2 = Sequential([
             Conv2D(64,3,padding='same',data_format='channels_first',activation='relu',input_shape=(2,8,8)),
             BatchNormalization(),
-            Conv2D(64,3,padding='same',data_format='channels_first',activation='relu'),
-            Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
             Conv2D(128,3,padding='same',data_format='channels_first',activation='relu'),
             Flatten(),
             Dense(128, activation='relu'),
