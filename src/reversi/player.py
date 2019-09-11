@@ -130,8 +130,16 @@ class NNQPlayer(Player):
         self.possible_location_last = None
 
         self.record = []
-
-
+        self.reward_board = list(map(lambda x:x/100,
+                [100,-25,10,5,5,10,-25,100,
+                -25,-25,2,2,2,2,-25,-25,
+                10,2,5,1,1,5,2,10,
+                5,2,1,2,2,1,2,5,
+                5,2,1,2,2,1,2,5,
+                10,2,5,1,1,5,2,10,
+                -25,-25,2,2,2,2,-25,-25,
+                100,-25,10,5,5,10,-25,100]))
+        
     def action(self, state, possible_hand, episode):
         state = state.split(',')[0]
         state = [i for i in state if i in ['b','w','-']]
@@ -170,10 +178,10 @@ class NNQPlayer(Player):
 
         if hand == 0: #行動がパス(0)ならmemoryデータベースを更新しない
             return '{}_{}'.format(self.color, hand)
-
+        r = self.reward_board[hand-1] if hand != 0 else 0
         possible_location = possible_location.reshape(-1) #memory用に次元変換
         if self.s_last is not None: #状態sと行動handを記憶
-            self.memory.append(self.s_last, self.a_last, self.possible_location_last, s, possible_location, 0, 0)
+            self.memory.append(self.s_last, self.a_last, self.possible_location_last, s, possible_location, r, 0)
         self.s_last = s
         self.a_last = hand
         self.possible_location_last = possible_location
