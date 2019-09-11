@@ -1,4 +1,4 @@
-title='4C_cnn_3in_20fpe'
+title='4C_cnn_3in_20fpe_multi'
 import sys
 import reversi
 from tqdm import tqdm
@@ -87,7 +87,6 @@ def train_q_function(q_function, memory, target_q_function,
             
             
             s, a, p, s_dash, p_dash, r, e = memory.read(perm[i:i+batch_size])
-            
             x = s2input(s, p).astype(np.float32)
             x_dash = s2input(s_dash, p_dash).astype(np.float32)
             
@@ -99,16 +98,17 @@ def train_q_function(q_function, memory, target_q_function,
             
             max_q_s_a_dash[e == 1] == 0 #試合終了の状態があれば次の状態は存在しないので次の状態で得られる最大報酬は0
             t = q_s.copy()
-            t[np.arange(len(t)), a-1] += r + gamma * \
-                (max_q_s_a_dash  -  t[np.arange(len(t)), a-1])
             
+            t[np.arange(len(t)), a-1] += r[np.arange(len(t)),0] + gamma * \
+                (r[np.arange(len(t)),1] + gamma*r[np.arange(len(t)),2] + gamma**2*max_q_s_a_dash - t[np.arange(len(t)), a-1])  
+
             q_function.model.fit(x, t, verbose=0) #学習        
 
 class Memory(object):
 
     def __init__(self, size=128):
         self.size = size
-        self.memory = np.zeros((size, 259), dtype=np.float32)
+        self.memory = np.zeros((size, 261), dtype=np.float32)
         self.counter = 0
 
     def __len__(self):
@@ -121,8 +121,8 @@ class Memory(object):
         
         s_dash = self.memory[ind, 129:193].astype(np.int32)
         p_dash = self.memory[ind, 193:257]
-        r = self.memory[ind, 257]
-        e = self.memory[ind, 258]
+        r = self.memory[ind, 257:260]
+        e = self.memory[ind, 260]
         return s, a, p, s_dash, p_dash, r, e
 
     def write(self, ind, s, a, p, s_dash, p_dash, r, e):
@@ -131,8 +131,8 @@ class Memory(object):
         self.memory[ind, 65:129] = p
         self.memory[ind, 129:193] = s_dash
         self.memory[ind, 193:257] = p_dash
-        self.memory[ind, 257] = r
-        self.memory[ind, 258] = e
+        self.memory[ind, 257:260] = r
+        self.memory[ind, 260] = e
 
     def append(self, s, a, p, s_dash, p_dash, r, e):
         ind = self.counter % self.size

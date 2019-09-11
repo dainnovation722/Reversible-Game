@@ -4,6 +4,7 @@ from reversi.board import ReversiBoard
 import random
 import numpy as np
 from copy import deepcopy
+from collections import deque
 
 class Player(ABC):
 
@@ -125,12 +126,13 @@ class NNQPlayer(Player):
         self.q_function = q_function
         self.memory = memory
 
-        self.s_last = None
-        self.a_last = None
-        self.possible_location_last = None
+        self.s_history = deque(maxlen=3)
+        self.a_history = deque(maxlen=3)
+        self.pl_history = deque(maxlen=3)
+        self.r_history = deque(maxlen=3)
 
         self.record = []
-        self.reward_board = list(map(lambda x:x/100,
+        self.reward_board = list(map(lambda x:x/1000,
                 [100,-25,10,5,5,10,-25,100,
                 -25,-25,2,2,2,2,-25,-25,
                 10,2,5,1,1,5,2,10,
@@ -180,11 +182,14 @@ class NNQPlayer(Player):
             return '{}_{}'.format(self.color, hand)
         r = self.reward_board[hand-1] if hand != 0 else 0
         possible_location = possible_location.reshape(-1) #memory用に次元変換
-        if self.s_last is not None: #状態sと行動handを記憶
-            self.memory.append(self.s_last, self.a_last, self.possible_location_last, s, possible_location, r, 0)
-        self.s_last = s
-        self.a_last = hand
-        self.possible_location_last = possible_location
+        #Multi-Steps
+        self.s_history.append(s)
+        self.a_history.append(hand)
+        self.pl_history.append(possible_location)
+        self.r_history.append(r)
+        if len(self.s_history) >= 3: 
+            self.memory.append(self.s_history[0], self.a_history[0], self.pl_history[0], self.s_history[2], self.pl_history[2], self.r_history, 0)
+        
         action = '{}_{}'.format(self.color, hand)
         
         return action 
@@ -202,11 +207,16 @@ class NNQPlayer(Player):
             r = self.reward_lose
             
         possible_location = np.zeros(shape=(64,),dtype=int)
-        self.memory.append(self.s_last, self.a_last, self.possible_location_last, s, possible_location, r, 1)
+        self.s_history.append(s)
+        self.a_history.append(0) #dequeの仕様上0を追加している
+        self.pl_history.append(possible_location)   
+        self.r_history.append(r)
+        self.memory.append(self.s_history[0], self.a_history[0], self.pl_history[0], self.s_history[2], self.pl_history[2], self.r_history, 1)
 
-        self.s_last = None
-        self.a_last = None
-        self.possible_location_last = None
-
+        self.s_history = deque(maxlen=3)
+        self.a_history = deque(maxlen=3)
+        self.pl_history = deque(maxlen=3)
+        self.r_history = deque(maxlen=3)
+        
         self.record.append(r) 
 
