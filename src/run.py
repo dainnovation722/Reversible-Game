@@ -10,13 +10,13 @@ plt.tight_layout()
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Dropout, Flatten, BatchNormalization
 from keras.layers.convolutional import Conv2D
-from keras.optimizers import Adam
+from keras.optimizers import SGD
 from keras import regularizers
 from time import time 
 import os 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 t1 = time()
-total_episode = 5000 #訓練回数
+total_episode = 10 #訓練回数
 
 if not os.path.exists("models"):
     os.mkdir("models")
@@ -49,8 +49,9 @@ class QFunction():
             Dense(64, activation='softmax'),
             BatchNormalization()
         ])
-        self.model.compile(optimizer='sgd', loss='mse')
-        self.model2.compile(optimizer='sgd', loss='mse')
+        sgd = SGD(momentum=0.95)
+        self.model.compile(optimizer=sgd, loss='mse')
+        self.model2.compile(optimizer=sgd, loss='mse')
         
         if summary:
             print(self.model.summary())
@@ -80,7 +81,7 @@ def s2input(state, possible_location):
        
 def train_q_function(q_function, memory, target_q_function,
                      batch_size=32, gamma=0.9, n_epoch=20):
-        
+                        
     for e in range(n_epoch): #1つの試合の経験値(memory)から学び取る回数
         perm = np.random.permutation(len(memory)) #memoryのデータは時系列データなのでデータ間に相関が出ないようにrandom samplingする
         for i in range(0, len(memory), batch_size):
@@ -102,8 +103,8 @@ def train_q_function(q_function, memory, target_q_function,
             t[np.arange(len(t)), a-1] += r + gamma * \
                 (max_q_s_a_dash  -  t[np.arange(len(t)), a-1])
             
-            q_function.model.fit(x, t, verbose=0) #学習        
-
+            q_function.model.fit(x, t, verbose=0) #学習  
+            
 class Memory(object):
 
     def __init__(self, size=128):
@@ -175,8 +176,8 @@ for episode in tqdm(range(total_episode)):
     sep = total_episode*0.1
     save_sep = sep*0.1
     if episode%sep==0:
-        save(ME,CPU,q_function,title=title)    
-
+        save(ME,CPU,q_function,title=title)  
+    
 Time = time() - t1
 print("Execution Time : {:.3f} minutes".format(Time/60))
 

@@ -42,8 +42,9 @@ class Reversi(object):
         return _board
 
     def main_loop(self, episode=False, print_game=False):
-
+        counter = 0
         while True:
+            
             state = self.board.get_status()
             board, last_hand, next_color, winner = state.split(',') 
             
@@ -54,12 +55,14 @@ class Reversi(object):
             possible_hand = self.board.get_possible_hand(next_color)
 
             # action
-            action = next_player.action(state, possible_hand, episode)
+            action = next_player.action(state, possible_hand, episode, counter)
             self.board.do_action(action)
 
             if print_game:
                 print(self._format_board(board))
                 print('player:{}, action:{}\n'.format(*action.split('_')))
+            
+            counter += 1
 
         # finalize
         self.black.finalize(state, winner)

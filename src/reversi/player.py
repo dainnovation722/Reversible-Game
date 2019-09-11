@@ -4,6 +4,7 @@ from reversi.board import ReversiBoard
 import random
 import numpy as np
 from copy import deepcopy
+from collections import deque
 
 class Player(ABC):
 
@@ -95,7 +96,7 @@ class RandomPlayer(Player):
         self.reward_lose = reward_lose
         self.record = []
         
-    def action(self, state, possible_hand, episode):
+    def action(self, state, possible_hand, episode, counter):
         hand = random.choice(possible_hand.split(',')) #listからrandomに位置(str型)を選択
         action = '{}_{}'.format(self.color, hand)
         return action
@@ -125,14 +126,14 @@ class NNQPlayer(Player):
         self.q_function = q_function
         self.memory = memory
 
-        self.s_last = None
-        self.a_last = None
-        self.possible_location_last = None
+        self.s_history = deque(maxlen=4)
+        self.a_history = deque(maxlen=4)
+        self.pl_history = deque(maxlen=4)
 
         self.record = []
 
 
-    def action(self, state, possible_hand, episode):
+    def action(self, state, possible_hand, episode, counter):
         state = state.split(',')[0]
         state = [i for i in state if i in ['b','w','-']]
         s = [(0 if i == '-' else (1 if i == self.color else -1)) for i in state]
@@ -170,15 +171,17 @@ class NNQPlayer(Player):
 
         if hand == 0: #行動がパス(0)ならmemoryデータベースを更新しない
             return '{}_{}'.format(self.color, hand)
-
-        possible_location = possible_location.reshape(-1) #memory用に次元変換
-        if self.s_last is not None: #状態sと行動handを記憶
-            self.memory.append(self.s_last, self.a_last, self.possible_location_last, s, possible_location, 0, 0)
-        self.s_last = s
-        self.a_last = hand
-        self.possible_location_last = possible_location
-        action = '{}_{}'.format(self.color, hand)
         
+        possible_location = possible_location.reshape(-1) #memory用に次元変換
+        
+        #Multi-Steps
+        self.s_history.append(s)
+        self.a_history.append(hand)
+        self.pl_history.append(possible_location)
+        if len(self.s_history) >= 4: 
+            self.memory.append(self.s_history[0], self.a_history[0], self.pl_history[0], self.s_history[3], self.pl_history[3], 0, 0)
+        
+        action = '{}_{}'.format(self.color, hand)
         return action 
     
     def finalize(self, state, winner):
@@ -194,11 +197,15 @@ class NNQPlayer(Player):
             r = self.reward_lose
             
         possible_location = np.zeros(shape=(64,),dtype=int)
-        self.memory.append(self.s_last, self.a_last, self.possible_location_last, s, possible_location, r, 1)
+        self.s_history.append(s)
+        self.a_history.append(0) #dequeの仕様上0を追加している
+        self.pl_history.append(possible_location)   
+        
+        self.memory.append(self.s_history[0], self.a_history[0], self.pl_history[0], self.s_history[3], self.pl_history[3], r, 1)
 
-        self.s_last = None
-        self.a_last = None
-        self.possible_location_last = None
-
+        self.s_history = deque(maxlen=4)
+        self.a_history = deque(maxlen=4)
+        self.pl_history = deque(maxlen=4)
+        
         self.record.append(r) 
 
